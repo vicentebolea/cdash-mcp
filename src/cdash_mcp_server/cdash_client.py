@@ -2,14 +2,15 @@
 
 import requests
 import json
-import sys
 from typing import Optional, Dict, Any, List
 
 
 class CDashClient:
     """Client for interacting with CDash GraphQL API."""
 
-    def __init__(self, base_url: str = "https://open.cdash.org", token: Optional[str] = None):
+    def __init__(
+        self, base_url: str = "https://open.cdash.org", token: Optional[str] = None
+    ):
         """Initialize CDash client.
 
         Args:
@@ -21,13 +22,17 @@ class CDashClient:
         self.session = requests.Session()
 
         if token:
-            self.session.headers.update({
-                'Authorization': f'Bearer {token}',
-                'X-API-Token': token,
-                'Content-Type': 'application/json'
-            })
+            self.session.headers.update(
+                {
+                    "Authorization": f"Bearer {token}",
+                    "X-API-Token": token,
+                    "Content-Type": "application/json",
+                }
+            )
 
-    def _make_graphql_request(self, query: str, variables: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+    def _make_graphql_request(
+        self, query: str, variables: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         """Make a GraphQL request to CDash.
 
         Args:
@@ -39,15 +44,20 @@ class CDashClient:
         """
         url = f"{self.base_url}/graphql"
 
-        payload = {'query': query}
+        payload = {"query": query}
         if variables:
-            payload['variables'] = variables
+            payload["variables"] = variables
 
         try:
             response = self.session.post(url, json=payload, timeout=15)
             response.raise_for_status()
             return response.json()
-        except (requests.exceptions.Timeout, requests.exceptions.RequestException, json.JSONDecodeError, Exception):
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.RequestException,
+            json.JSONDecodeError,
+            Exception,
+        ):
             return None
 
     def list_projects(self) -> Optional[List[Dict[str, Any]]]:
@@ -74,14 +84,16 @@ class CDashClient:
         """
         result = self._make_graphql_request(query)
 
-        if result and 'data' in result and 'projects' in result['data']:
+        if result and "data" in result and "projects" in result["data"]:
             projects = []
-            for edge in result['data']['projects']['edges']:
-                projects.append(edge['node'])
+            for edge in result["data"]["projects"]["edges"]:
+                projects.append(edge["node"])
             return projects
         return None
 
-    def list_builds(self, project_name: str, limit: int = 50) -> Optional[List[Dict[str, Any]]]:
+    def list_builds(
+        self, project_name: str, limit: int = 50
+    ) -> Optional[List[Dict[str, Any]]]:
         """Get builds for a specific project.
 
         Args:
@@ -113,16 +125,13 @@ class CDashClient:
             }
         }
         """
-        variables = {
-            'projectName': project_name,
-            'first': limit
-        }
+        variables = {"projectName": project_name, "first": limit}
         result = self._make_graphql_request(query, variables)
 
-        if result and 'data' in result and result['data'].get('project'):
+        if result and "data" in result and result["data"].get("project"):
             builds = []
-            if result['data']['project'].get('builds'):
-                for edge in result['data']['project']['builds']['edges']:
-                    builds.append(edge['node'])
+            if result["data"]["project"].get("builds"):
+                for edge in result["data"]["project"]["builds"]["edges"]:
+                    builds.append(edge["node"])
             return builds
         return None

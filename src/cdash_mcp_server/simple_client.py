@@ -84,11 +84,7 @@ class MCPClient:
 
     def list_tools(self):
         """List available tools from the MCP server."""
-        payload = {
-            "jsonrpc": "2.0",
-            "id": "list_tools",
-            "method": "tools/list"
-        }
+        payload = {"jsonrpc": "2.0", "id": "list_tools", "method": "tools/list"}
         response = self._make_request(payload)
         if response:
             result = self._parse_response(response)
@@ -109,10 +105,7 @@ class MCPClient:
             "jsonrpc": "2.0",
             "id": "call_tool",
             "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments or {}
-            }
+            "params": {"name": tool_name, "arguments": arguments or {}},
         }
         response = self._make_request(payload)
         if response:
@@ -130,27 +123,27 @@ class MCPClient:
 def cli(ctx, host, port, base_url, token):
     """CDash MCP Client - Query CDash via MCP server."""
     ctx.ensure_object(dict)
-    ctx.obj['client'] = MCPClient(host=host, port=port)
-    ctx.obj['base_url'] = base_url
-    ctx.obj['token'] = token
+    ctx.obj["client"] = MCPClient(host=host, port=port)
+    ctx.obj["base_url"] = base_url
+    ctx.obj["token"] = token
 
 
 @cli.command()
 @click.pass_context
 def list_tools(ctx):
     """List available MCP tools."""
-    client = ctx.obj['client']
+    client = ctx.obj["client"]
     result = client.list_tools()
 
-    if 'error' in result:
+    if "error" in result:
         click.echo(f"Error: {result['error']}", err=True)
         sys.exit(1)
 
     click.echo("Available tools:")
-    if 'tools' in result:
-        for tool in result['tools']:
+    if "tools" in result:
+        for tool in result["tools"]:
             click.echo(f"\n  {tool['name']}")
-            if 'description' in tool:
+            if "description" in tool:
                 click.echo(f"    {tool['description']}")
     else:
         click.echo(json.dumps(result, indent=2))
@@ -160,52 +153,54 @@ def list_tools(ctx):
 @click.pass_context
 def list_projects(ctx):
     """List all CDash projects."""
-    client = ctx.obj['client']
-    base_url = ctx.obj['base_url']
-    token = ctx.obj['token']
+    client = ctx.obj["client"]
+    base_url = ctx.obj["base_url"]
+    token = ctx.obj["token"]
 
-    result = client.call_tool("list_projects", {
-        "base_url": base_url,
-        "token": token
-    })
+    result = client.call_tool("list_projects", {"base_url": base_url, "token": token})
 
-    if 'error' in result:
+    if "error" in result:
         click.echo(f"Error: {result['error']}", err=True)
         sys.exit(1)
 
-    if 'result' in result and 'content' in result['result']:
-        for item in result['result']['content']:
-            if 'text' in item:
-                click.echo(item['text'])
+    if "result" in result and "content" in result["result"]:
+        for item in result["result"]["content"]:
+            if "text" in item:
+                click.echo(item["text"])
     else:
         click.echo(json.dumps(result, indent=2))
 
 
 @cli.command()
-@click.argument('project_name')
-@click.option('--limit', default=50, type=int, help='Maximum number of builds to return')
+@click.argument("project_name")
+@click.option(
+    "--limit", default=50, type=int, help="Maximum number of builds to return"
+)
 @click.pass_context
 def list_builds(ctx, project_name, limit):
     """List builds for a specific project."""
-    client = ctx.obj['client']
-    base_url = ctx.obj['base_url']
-    token = ctx.obj['token']
+    client = ctx.obj["client"]
+    base_url = ctx.obj["base_url"]
+    token = ctx.obj["token"]
 
-    result = client.call_tool("list_builds", {
-        "project_name": project_name,
-        "base_url": base_url,
-        "token": token,
-        "limit": limit
-    })
+    result = client.call_tool(
+        "list_builds",
+        {
+            "project_name": project_name,
+            "base_url": base_url,
+            "token": token,
+            "limit": limit,
+        },
+    )
 
-    if 'error' in result:
+    if "error" in result:
         click.echo(f"Error: {result['error']}", err=True)
         sys.exit(1)
 
-    if 'result' in result and 'content' in result['result']:
-        for item in result['result']['content']:
-            if 'text' in item:
-                click.echo(item['text'])
+    if "result" in result and "content" in result["result"]:
+        for item in result["result"]["content"]:
+            if "text" in item:
+                click.echo(item["text"])
     else:
         click.echo(json.dumps(result, indent=2))
 
@@ -215,5 +210,5 @@ def main():
     cli(obj={})
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

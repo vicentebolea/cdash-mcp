@@ -32,10 +32,10 @@ def _list_projects_impl(base_url: str, token: str) -> str:
         lines = [f"# CDash Projects ({base_url})", ""]
         for project in projects:
             lines.append(f"## {project['name']}")
-            if project.get('description'):
+            if project.get("description"):
                 lines.append(f"**Description:** {project['description']}")
             lines.append(f"**Build Count:** {project.get('buildCount', 0)}")
-            if project.get('homeurl'):
+            if project.get("homeurl"):
                 lines.append(f"**Home URL:** {project['homeurl']}")
             lines.append(f"**Visibility:** {project.get('visibility', 'Unknown')}")
             lines.append(f"**ID:** {project['id']}")
@@ -47,7 +47,9 @@ def _list_projects_impl(base_url: str, token: str) -> str:
         return f"Error listing projects from {base_url}: {str(e)}"
 
 
-def _list_builds_impl(base_url: str, token: str, project_name: str, limit: int = 50) -> str:
+def _list_builds_impl(
+    base_url: str, token: str, project_name: str, limit: int = 50
+) -> str:
     """Implementation of list_builds tool."""
     if not token:
         return "Error: token parameter is required"
@@ -63,7 +65,10 @@ def _list_builds_impl(base_url: str, token: str, project_name: str, limit: int =
         builds = client.list_builds(project_name, limit)
 
         if builds is None:
-            return f"Error: Failed to retrieve builds for project '{project_name}' from {base_url}. Project may not exist."
+            return (
+                f"Error: Failed to retrieve builds for project '{project_name}' "
+                f"from {base_url}. Project may not exist."
+            )
 
         if not builds:
             return f"No builds found for project '{project_name}' at {base_url}"
@@ -74,7 +79,7 @@ def _list_builds_impl(base_url: str, token: str, project_name: str, limit: int =
         lines.append("")
 
         for i, build in enumerate(builds, 1):
-            status = "FAILED" if build.get('failedTestsCount', 0) > 0 else "PASSED"
+            status = "FAILED" if build.get("failedTestsCount", 0) > 0 else "PASSED"
             status_emoji = "❌" if status == "FAILED" else "✅"
 
             lines.append(f"## Build {i}: {build['name']} {status_emoji}")
@@ -110,7 +115,12 @@ def list_projects(base_url: str = "https://open.cdash.org", token: str = "") -> 
 
 
 @mcp.tool()
-def list_builds(project_name: str, base_url: str = "https://open.cdash.org", token: str = "", limit: int = 50) -> str:
+def list_builds(
+    project_name: str,
+    base_url: str = "https://open.cdash.org",
+    token: str = "",
+    limit: int = 50,
+) -> str:
     """List builds for a specific CDash project.
 
     Args:

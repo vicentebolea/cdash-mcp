@@ -1,6 +1,5 @@
 """Unit tests for CDash client."""
 
-import pytest
 from unittest.mock import Mock, patch
 from cdash_mcp_server.cdash_client import CDashClient
 
@@ -12,8 +11,8 @@ class TestCDashClient:
         """Test client initialization with token."""
         client = CDashClient(token="test-token")
         assert client.token == "test-token"
-        assert client.base_url == "https://cdash.spack.io"
-        assert 'Authorization' in client.session.headers
+        assert client.base_url == "https://open.cdash.org"
+        assert "Authorization" in client.session.headers
 
     def test_client_custom_base_url(self):
         """Test client initialization with custom base URL."""
@@ -21,7 +20,7 @@ class TestCDashClient:
         client = CDashClient(base_url=custom_url, token="test-token")
         assert client.base_url == custom_url
 
-    @patch('requests.Session.post')
+    @patch("requests.Session.post")
     def test_list_projects_success(self, mock_post):
         """Test successful project listing."""
         mock_response = Mock()
@@ -36,7 +35,7 @@ class TestCDashClient:
                                 "description": "A test project",
                                 "homeurl": "https://example.com",
                                 "visibility": "PUBLIC",
-                                "buildCount": 10
+                                "buildCount": 10,
                             }
                         }
                     ]
@@ -53,7 +52,7 @@ class TestCDashClient:
         assert projects[0]["name"] == "Test Project"
         assert projects[0]["buildCount"] == 10
 
-    @patch('requests.Session.post')
+    @patch("requests.Session.post")
     def test_list_projects_error(self, mock_post):
         """Test project listing with API error."""
         mock_response = Mock()
@@ -65,7 +64,7 @@ class TestCDashClient:
 
         assert projects is None
 
-    @patch('requests.Session.post')
+    @patch("requests.Session.post")
     def test_list_builds_success(self, mock_post):
         """Test successful build listing."""
         mock_response = Mock()
@@ -83,7 +82,7 @@ class TestCDashClient:
                                     "endTime": "2024-10-20T13:00:00Z",
                                     "failedTestsCount": 0,
                                     "passedTestsCount": 50,
-                                    "site": {"name": "test-runner"}
+                                    "site": {"name": "test-runner"},
                                 }
                             }
                         ]
@@ -101,15 +100,11 @@ class TestCDashClient:
         assert builds[0]["name"] == "test-build"
         assert builds[0]["failedTestsCount"] == 0
 
-    @patch('requests.Session.post')
+    @patch("requests.Session.post")
     def test_list_builds_project_not_found(self, mock_post):
         """Test build listing for non-existent project."""
         mock_response = Mock()
-        mock_response.json.return_value = {
-            "data": {
-                "project": None
-            }
-        }
+        mock_response.json.return_value = {"data": {"project": None}}
         mock_post.return_value = mock_response
 
         client = CDashClient(token="test-token")

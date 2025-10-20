@@ -1,7 +1,6 @@
 """Pytest configuration and fixtures."""
 
 import pytest
-from unittest.mock import Mock
 
 
 @pytest.fixture
@@ -14,7 +13,7 @@ def mock_cdash_projects():
             "description": "First test project",
             "homeurl": "https://example.com/project1",
             "visibility": "PUBLIC",
-            "buildCount": 42
+            "buildCount": 42,
         },
         {
             "id": "2",
@@ -22,8 +21,8 @@ def mock_cdash_projects():
             "description": "Second test project",
             "homeurl": "https://example.com/project2",
             "visibility": "PRIVATE",
-            "buildCount": 17
-        }
+            "buildCount": 17,
+        },
     ]
 
 
@@ -39,7 +38,7 @@ def mock_cdash_builds():
             "endTime": "2024-10-20T13:00:00Z",
             "failedTestsCount": 0,
             "passedTestsCount": 150,
-            "site": {"name": "ubuntu-runner"}
+            "site": {"name": "ubuntu-runner"},
         },
         {
             "id": "101",
@@ -49,8 +48,8 @@ def mock_cdash_builds():
             "endTime": "2024-10-20T13:15:00Z",
             "failedTestsCount": 3,
             "passedTestsCount": 147,
-            "site": {"name": "windows-runner"}
-        }
+            "site": {"name": "windows-runner"},
+        },
     ]
 
 
