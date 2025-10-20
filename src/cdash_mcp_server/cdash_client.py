@@ -9,11 +9,11 @@ from typing import Optional, Dict, Any, List
 class CDashClient:
     """Client for interacting with CDash GraphQL API."""
 
-    def __init__(self, base_url: str = "https://cdash.spack.io", token: Optional[str] = None):
+    def __init__(self, base_url: str = "https://open.cdash.org", token: Optional[str] = None):
         """Initialize CDash client.
 
         Args:
-            base_url: CDash instance base URL
+            base_url: CDash instance base URL (default: https://open.cdash.org)
             token: Authentication token for CDash API
         """
         self.base_url = base_url

@@ -15,14 +15,17 @@ pip install .
 
 ## Configuration
 
-The server requires a CDash authentication token and base URL. These can be provided via:
+The server requires a CDash authentication token and optionally a base URL. These can be provided via:
 - Environment variables: `CDASH_TOKEN` and `CDASH_BASE_URL`
 - Command line arguments: `--token` and `--base-url`
 
 ```bash
 # Set environment variables
 export CDASH_TOKEN="your-token-here"
-export CDASH_BASE_URL="https://cdash.spack.io"  # Default value
+export CDASH_BASE_URL="https://open.cdash.org"  # Default value
+
+# Or use a different CDash instance
+export CDASH_BASE_URL="https://cdash.spack.io"
 ```
 
 ## Usage
@@ -30,11 +33,17 @@ export CDASH_BASE_URL="https://cdash.spack.io"  # Default value
 ### Server
 
 ```bash
-# Start stdio server (for MCP clients)
+# Start stdio server (for MCP clients) with default CDash instance
 cdash-mcp-server --token YOUR_TOKEN
+
+# Use a specific CDash instance
+cdash-mcp-server --token YOUR_TOKEN --base-url https://cdash.spack.io
 
 # Start HTTP server for direct access
 cdash-mcp-server --token YOUR_TOKEN --transport http --host localhost --port 8000
+
+# Use custom CDash instance with HTTP transport
+cdash-mcp-server --token YOUR_TOKEN --base-url https://cdash.spack.io --transport http
 ```
 
 ### Client
