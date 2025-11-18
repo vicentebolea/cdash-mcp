@@ -123,6 +123,7 @@ jobs:
           podman build -t "ghcr.io/${GITHUB_REPOSITORY}/cdash:latest" \
                        -t "ghcr.io/${GITHUB_REPOSITORY}/cdash:${{ github.sha }}" \
                        -t "ghcr.io/${GITHUB_REPOSITORY}/cdash:${{ steps.slug.outputs.SHORT_SHA }}" \
+                       -f ./scripts/cdash-mcp-server.dockerfile \
                        .
 
           # Push all tags

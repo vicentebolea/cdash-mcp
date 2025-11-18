@@ -1,0 +1,15 @@
+[Unit]
+Description=Docker Compose for cdash-mcp-compose.yml
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/var/opt/cdash-mcp-server/
+ExecStart=/usr/bin/docker compose -f ./cdash-mcp-compose.yml up -d --build
+ExecStop=/usr/bin/docker compose -f ./cdash-mcp-compose.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

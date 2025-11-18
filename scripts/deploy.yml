@@ -1,0 +1,28 @@
+---
+- hosts: all
+  handlers:
+    - name: restart cdash-mcp-server.service
+      ansible.builtin.systemd:
+        daemon-reload: true
+        name: cdash-mcp-server.service
+        enabled: true
+        state: restarted
+  tasks:
+    - ansible.builtin.package:
+        name:
+          - docker
+          - docker-compose
+        state: latest
+    - name: Create a directory if it does not exist
+      ansible.builtin.file:
+        path: /var/opt/cdash-mcp-server
+        state: directory
+    - name: install cdash-mcp-server files
+      ansible.builtin.copy:
+        src: "./{{ item[0]}}"
+        dest: "{{ item[1] }}"
+      loop:
+        - ['cdash-mcp-compose.yml',    '/var/opt/cdash-mcp-server/']
+        - ['cdash-mcp-server.service', '/etc/systemd/system/']
+      notify:
+        - restart cdash-mcp-server.service

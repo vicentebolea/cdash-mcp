@@ -1,0 +1,19 @@
+version: '3.3'
+
+services:
+  dht11:
+    image: ghcr.io/vicentebolea/cdash-mcp/cdash:latest
+    container_name: cdash-mcp-server
+    network_mode: host
+    command: ["cdash-mcp-server", "--transport", "http", "--host", "0.0.0.0", "--port", "8888"]
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_REMOVE_VOLUMES=true
