@@ -56,7 +56,7 @@ cdash-mcp-server --cache-size 10 --cache-ttl 60
 
 ## MCP Tools
 
-The server provides three MCP tools:
+The server provides six MCP tools:
 
 ### 1. execute_graphql_query
 
@@ -141,6 +141,77 @@ Get statistics about the query cache.
 ### 3. clear_cache
 
 Clear all cached query results.
+
+### 4. describe_schema
+
+Fetch and describe the CDash GraphQL schema using introspection.
+
+**Parameters:**
+- `base_url` (string): CDash instance URL (default: "https://open.cdash.org")
+
+**Returns:**
+- Detailed schema information including types, queries, fields, and arguments
+- Focuses on important types like Query, Project, Build, Site, and User
+
+**Example:**
+```json
+{
+  "success": true,
+  "query_type": "Query",
+  "mutation_type": "Mutation",
+  "types": [...]
+}
+```
+
+### 5. get_query_examples
+
+Get common CDash GraphQL query examples organized by category.
+
+**Returns:**
+- Categorized examples for projects, builds, filtering, and pagination
+- Ready-to-use queries with example variables
+- Tips for date filtering and advanced usage
+
+**Categories include:**
+- Projects (list all, get by name)
+- Builds (list recent, get by ID)
+- Filtering & Sorting (pagination)
+- Date Filtering Tips
+
+### 6. list_builds
+
+Convenience tool for listing builds with advanced filtering and sorting capabilities.
+
+**Parameters:**
+- `project_name` (string, required): Name of the CDash project
+- `limit` (int): Maximum number of builds to return (default: 10)
+- `order_by` (string): Field to sort by - "buildDuration", "configureDuration", "testDuration", "startTime", "endTime"
+- `order_direction` (string): Sort direction - "ASC" or "DESC" (default: "DESC")
+- `date` (string): Date filter supporting:
+  - Relative dates: "yesterday", "today", "last_7_days", "last_week"
+  - Absolute dates: "2025-11-26" (YYYY-MM-DD format)
+- `site_name` (string): Filter builds by site name (exact match, case-insensitive)
+- `base_url` (string): CDash instance URL (default: "https://open.cdash.org")
+- `use_cache` (bool): Whether to use cached results (default: true)
+
+**Returns:**
+- Filtered and sorted builds
+- Metadata about total fetched vs filtered
+- Applied filters information
+
+**Examples:**
+```bash
+# Get 10 slowest builds from yesterday
+list_builds("ParaView", limit=10, order_by="buildDuration", date="yesterday")
+
+# Get builds from specific site
+list_builds("ParaView", site_name="gitlab-ci", limit=20)
+
+# Get builds from last week, sorted by test duration
+list_builds("ParaView", limit=15, order_by="testDuration", date="last_7_days")
+```
+
+**Note:** Since CDash GraphQL has limited server-side filtering support, this tool fetches a larger dataset and performs client-side filtering and sorting for better results.
 
 ## MCP Resources
 

@@ -1,15 +1,20 @@
 version: '3.3'
 
 services:
-  dht11:
+  cdash-mcp:
     image: ghcr.io/vicentebolea/cdash-mcp/cdash:latest
     container_name: cdash-mcp-server
-    network_mode: host
+    ports:
+      - 8888:8888
     command: ["cdash-mcp-server", "--transport", "http", "--host", "0.0.0.0", "--port", "8888"]
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
 
   watchtower:
     image: containrrr/watchtower
+    external: true
+    restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
@@ -17,3 +22,4 @@ services:
       - WATCHTOWER_CLEANUP=true
       - WATCHTOWER_INCLUDE_RESTARTING=true
       - WATCHTOWER_REMOVE_VOLUMES=true
+      - WATCHTOWER_LABEL_ENABLE=true
