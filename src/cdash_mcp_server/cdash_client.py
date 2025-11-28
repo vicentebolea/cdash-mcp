@@ -1,123 +1,119 @@
-"""CDash API Client for querying projects and builds."""
+"""CDash API Client for executing GraphQL queries."""
 
 import requests
 import json
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 
 class CDashClient:
     """Client for interacting with CDash GraphQL API."""
 
-    def __init__(
-        self, base_url: str = "https://open.cdash.org", token: Optional[str] = None
-    ):
+    def __init__(self, base_url: str = "https://open.cdash.org"):
         """Initialize CDash client.
 
         Args:
             base_url: CDash instance base URL (default: https://open.cdash.org)
-            token: Authentication token for CDash API
         """
-        self.base_url = base_url
-        self.token = token
+        self.base_url = base_url.rstrip("/")
         self.session = requests.Session()
+        self.session.headers.update({"Content-Type": "application/json"})
 
-        if token:
-            self.session.headers.update(
-                {
-                    "Authorization": f"Bearer {token}",
-                    "X-API-Token": token,
-                    "Content-Type": "application/json",
-                }
-            )
-
-    def _make_graphql_request(
-        self, query: str, variables: Optional[Dict[str, Any]] = None
-    ) -> Optional[Dict[str, Any]]:
-        """Make a GraphQL request to CDash.
+    def execute_query(
+        self, query: str, variables: Optional[Dict[str, Any]] = None, timeout: int = 30
+    ) -> Dict[str, Any]:
+        """Execute a GraphQL query against CDash.
 
         Args:
             query: GraphQL query string
             variables: Optional variables for the query
+            timeout: Request timeout in seconds
 
         Returns:
-            Response JSON or None on error
+            Dictionary with 'success', 'data', and optional 'errors' fields
         """
         url = f"{self.base_url}/graphql"
-
         payload = {"query": query}
         if variables:
             payload["variables"] = variables
 
         try:
-            response = self.session.post(url, json=payload, timeout=15)
+            response = self.session.post(url, json=payload, timeout=timeout)
             response.raise_for_status()
-            return response.json()
-        except (
-            requests.exceptions.Timeout,
-            requests.exceptions.RequestException,
-            json.JSONDecodeError,
-            Exception,
-        ):
-            return None
+            result = response.json()
 
-    def list_projects(self) -> Optional[List[Dict[str, Any]]]:
-        """List all available projects.
+            # Check for GraphQL errors
+            if "errors" in result:
+                return {
+                    "success": False,
+                    "errors": result["errors"],
+                    "data": result.get("data"),
+                }
+
+            return {"success": True, "data": result.get("data")}
+
+        except requests.exceptions.Timeout:
+            return {
+                "success": False,
+                "errors": [
+                    {
+                        "message": f"Request timed out after {timeout} seconds",
+                        "type": "timeout",
+                    }
+                ],
+            }
+        except requests.exceptions.RequestException as e:
+            return {
+                "success": False,
+                "errors": [
+                    {"message": f"Network error: {str(e)}", "type": "network_error"}
+                ],
+            }
+        except json.JSONDecodeError as e:
+            return {
+                "success": False,
+                "errors": [
+                    {
+                        "message": f"Invalid JSON response: {str(e)}",
+                        "type": "json_decode_error",
+                    }
+                ],
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "errors": [
+                    {"message": f"Unexpected error: {str(e)}", "type": "unknown_error"}
+                ],
+            }
+
+    def get_schema(self) -> Dict[str, Any]:
+        """Fetch the GraphQL schema introspection.
 
         Returns:
-            List of project dictionaries or None on error
+            Dictionary with schema information or error
         """
-        query = """
-        query {
-            projects {
-                edges {
-                    node {
-                        id
+        introspection_query = """
+        query IntrospectionQuery {
+            __schema {
+                queryType { name }
+                mutationType { name }
+                types {
+                    name
+                    kind
+                    description
+                    fields {
                         name
                         description
-                        homeurl
-                        visibility
-                        buildCount
-                    }
-                }
-            }
-        }
-        """
-        result = self._make_graphql_request(query)
-
-        if result and "data" in result and "projects" in result["data"]:
-            projects = []
-            for edge in result["data"]["projects"]["edges"]:
-                projects.append(edge["node"])
-            return projects
-        return None
-
-    def list_builds(
-        self, project_name: str, limit: int = 50
-    ) -> Optional[List[Dict[str, Any]]]:
-        """Get builds for a specific project.
-
-        Args:
-            project_name: Name of the project
-            limit: Maximum number of builds to return
-
-        Returns:
-            List of build dictionaries or None on error
-        """
-        query = """
-        query GetBuilds($projectName: String!, $first: Int) {
-            project(name: $projectName) {
-                builds(first: $first) {
-                    edges {
-                        node {
-                            id
+                        args {
                             name
-                            stamp
-                            startTime
-                            endTime
-                            failedTestsCount
-                            passedTestsCount
-                            site {
+                            description
+                            type {
                                 name
+                                kind
+                                ofType {
+                                    name
+                                    kind
+                                }
                             }
                         }
                     }
@@ -125,13 +121,4 @@ class CDashClient:
             }
         }
         """
-        variables = {"projectName": project_name, "first": limit}
-        result = self._make_graphql_request(query, variables)
-
-        if result and "data" in result and result["data"].get("project"):
-            builds = []
-            if result["data"]["project"].get("builds"):
-                for edge in result["data"]["project"]["builds"]["edges"]:
-                    builds.append(edge["node"])
-            return builds
-        return None
+        return self.execute_query(introspection_query)

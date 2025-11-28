@@ -118,14 +118,12 @@ class MCPClient:
 @click.option("--host", default="localhost", help="Server host")
 @click.option("--port", default=8000, type=int, help="Server port")
 @click.option("--base-url", default="https://open.cdash.org", help="CDash server URL")
-@click.option("--token", default="", help="CDash authentication token")
 @click.pass_context
-def cli(ctx, host, port, base_url, token):
-    """CDash MCP Client - Query CDash via MCP server."""
+def cli(ctx, host, port, base_url):
+    """CDash MCP Client - Execute GraphQL queries against CDash via MCP server."""
     ctx.ensure_object(dict)
     ctx.obj["client"] = MCPClient(host=host, port=port)
     ctx.obj["base_url"] = base_url
-    ctx.obj["token"] = token
 
 
 @cli.command()
@@ -150,14 +148,29 @@ def list_tools(ctx):
 
 
 @cli.command()
+@click.argument("query")
+@click.option("--variables", default=None, help="GraphQL variables as JSON string")
+@click.option("--no-cache", is_flag=True, help="Disable caching for this query")
 @click.pass_context
-def list_projects(ctx):
-    """List all CDash projects."""
+def query(ctx, query, variables, no_cache):
+    """Execute a GraphQL query against CDash."""
     client = ctx.obj["client"]
     base_url = ctx.obj["base_url"]
-    token = ctx.obj["token"]
 
-    result = client.call_tool("list_projects", {"base_url": base_url, "token": token})
+    arguments = {
+        "query": query,
+        "base_url": base_url,
+        "use_cache": not no_cache,
+    }
+
+    if variables:
+        try:
+            arguments["variables"] = json.loads(variables)
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: Invalid JSON in variables: {e}", err=True)
+            sys.exit(1)
+
+    result = client.call_tool("execute_graphql_query", arguments)
 
     if "error" in result:
         click.echo(f"Error: {result['error']}", err=True)
@@ -172,26 +185,30 @@ def list_projects(ctx):
 
 
 @cli.command()
-@click.argument("project_name")
-@click.option(
-    "--limit", default=50, type=int, help="Maximum number of builds to return"
-)
 @click.pass_context
-def list_builds(ctx, project_name, limit):
-    """List builds for a specific project."""
+def cache_stats(ctx):
+    """Get cache statistics."""
     client = ctx.obj["client"]
-    base_url = ctx.obj["base_url"]
-    token = ctx.obj["token"]
+    result = client.call_tool("get_cache_stats", {})
 
-    result = client.call_tool(
-        "list_builds",
-        {
-            "project_name": project_name,
-            "base_url": base_url,
-            "token": token,
-            "limit": limit,
-        },
-    )
+    if "error" in result:
+        click.echo(f"Error: {result['error']}", err=True)
+        sys.exit(1)
+
+    if "result" in result and "content" in result["result"]:
+        for item in result["result"]["content"]:
+            if "text" in item:
+                click.echo(item["text"])
+    else:
+        click.echo(json.dumps(result, indent=2))
+
+
+@cli.command()
+@click.pass_context
+def clear_cache(ctx):
+    """Clear all cached queries."""
+    client = ctx.obj["client"]
+    result = client.call_tool("clear_cache", {})
 
     if "error" in result:
         click.echo(f"Error: {result['error']}", err=True)

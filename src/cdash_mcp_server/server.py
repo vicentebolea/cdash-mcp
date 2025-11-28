@@ -1,139 +1,273 @@
 #!/usr/bin/env python3
-"""CDash MCP Server - Provides CDash query capabilities via MCP."""
+"""CDash MCP Server - Provides CDash GraphQL query execution via MCP."""
 
 import asyncio
+import json
 import click
 from fastmcp import FastMCP
 from .cdash_client import CDashClient
+from .cache import QueryCache
 
 # Initialize MCP server
-mcp = FastMCP("CDash MCP Server")
+mcp = FastMCP("CDash GraphQL MCP Server")
+
+# Global cache instance (configurable TTL and size)
+query_cache = QueryCache(max_size=100, default_ttl=300)
 
 
-def _list_projects_impl(base_url: str, token: str) -> str:
-    """Implementation of list_projects tool."""
-    if not token:
-        return "Error: token parameter is required"
-
-    if not base_url:
-        return "Error: base_url parameter is required"
-
-    try:
-        client = CDashClient(base_url=base_url, token=token)
-        projects = client.list_projects()
-
-        if projects is None:
-            return f"Error: Failed to retrieve projects from CDash API at {base_url}"
-
-        if not projects:
-            return f"No projects found in CDash at {base_url}"
-
-        # Format projects nicely
-        lines = [f"# CDash Projects ({base_url})", ""]
-        for project in projects:
-            lines.append(f"## {project['name']}")
-            if project.get("description"):
-                lines.append(f"**Description:** {project['description']}")
-            lines.append(f"**Build Count:** {project.get('buildCount', 0)}")
-            if project.get("homeurl"):
-                lines.append(f"**Home URL:** {project['homeurl']}")
-            lines.append(f"**Visibility:** {project.get('visibility', 'Unknown')}")
-            lines.append(f"**ID:** {project['id']}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    except Exception as e:
-        return f"Error listing projects from {base_url}: {str(e)}"
-
-
-def _list_builds_impl(
-    base_url: str, token: str, project_name: str, limit: int = 50
-) -> str:
-    """Implementation of list_builds tool."""
-    if not token:
-        return "Error: token parameter is required"
-
-    if not base_url:
-        return "Error: base_url parameter is required"
-
-    if not project_name:
-        return "Error: project_name is required"
-
-    try:
-        client = CDashClient(base_url=base_url, token=token)
-        builds = client.list_builds(project_name, limit)
-
-        if builds is None:
-            return (
-                f"Error: Failed to retrieve builds for project '{project_name}' "
-                f"from {base_url}. Project may not exist."
-            )
-
-        if not builds:
-            return f"No builds found for project '{project_name}' at {base_url}"
-
-        # Format builds nicely
-        lines = [f"# Builds for Project: {project_name} ({base_url})", ""]
-        lines.append(f"Showing {len(builds)} builds (limit: {limit})")
-        lines.append("")
-
-        for i, build in enumerate(builds, 1):
-            status = "FAILED" if build.get("failedTestsCount", 0) > 0 else "PASSED"
-            status_emoji = "❌" if status == "FAILED" else "✅"
-
-            lines.append(f"## Build {i}: {build['name']} {status_emoji}")
-            lines.append(f"**Status:** {status}")
-            lines.append(f"**ID:** {build['id']}")
-            lines.append(f"**Site:** {build['site']['name']}")
-            lines.append(f"**Stamp:** {build.get('stamp', 'N/A')}")
-            lines.append(f"**Start Time:** {build.get('startTime', 'N/A')}")
-            lines.append(f"**End Time:** {build.get('endTime', 'N/A')}")
-            lines.append(f"**Failed Tests:** {build.get('failedTestsCount', 0)}")
-            lines.append(f"**Passed Tests:** {build.get('passedTestsCount', 0)}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    except Exception as e:
-        return f"Error listing builds for '{project_name}' from {base_url}: {str(e)}"
-
-
-@mcp.tool()
-def list_projects(base_url: str = "https://open.cdash.org", token: str = "") -> str:
-    """List all available CDash projects.
-
-    Args:
-        base_url: CDash server URL (default: https://open.cdash.org)
-        token: CDash authentication token
-
-    Returns:
-        Formatted string with project information including name, description,
-        build count, and home URL for each project.
-    """
-    return _list_projects_impl(base_url, token)
-
-
-@mcp.tool()
-def list_builds(
-    project_name: str,
+def _execute_graphql_query_impl(
+    query: str,
     base_url: str = "https://open.cdash.org",
-    token: str = "",
-    limit: int = 50,
+    variables: dict = None,
+    use_cache: bool = True,
+    cache_ttl: int = None,
 ) -> str:
-    """List builds for a specific CDash project.
+    """Execute a GraphQL query against a CDash instance.
+
+    This tool allows you to run any GraphQL query against CDash. The server
+    will cache results to improve performance for repeated queries.
 
     Args:
-        project_name: Name of the CDash project (e.g., "Spack Testing")
-        base_url: CDash server URL (default: https://open.cdash.org)
-        token: CDash authentication token
-        limit: Maximum number of builds to return (default: 50)
+        query: GraphQL query string (required)
+        base_url: CDash instance URL (default: https://open.cdash.org)
+        variables: Dictionary of GraphQL variables (optional)
+        use_cache: Whether to use cached results if available (default: True)
+        cache_ttl: Cache time-to-live in seconds, overrides default 300s (optional)
 
     Returns:
-        Formatted string with build information including build name, ID,
-        site, start/end times, and test counts.
+        JSON string with query results or error information
+
+    Example queries:
+        1. List all projects:
+           query {
+             projects { edges { node { id name description } } }
+           }
+
+        2. Get builds for a project:
+           query GetBuilds($projectName: String!, $first: Int) {
+             project(name: $projectName) {
+               builds(first: $first) {
+                 edges { node { id name startTime failedTestsCount } }
+               }
+             }
+           }
+           Variables: {"projectName": "MyProject", "first": 10}
     """
-    return _list_builds_impl(base_url, token, project_name, limit)
+    if not query or not query.strip():
+        return json.dumps(
+            {"success": False, "errors": [{"message": "Query cannot be empty"}]},
+            indent=2,
+        )
+
+    # Check cache first
+    if use_cache:
+        cached_result = query_cache.get(query, variables, base_url)
+        if cached_result is not None:
+            result = cached_result.copy()
+            result["cached"] = True
+            return json.dumps(result, indent=2)
+
+    # Execute query
+    client = CDashClient(base_url=base_url)
+    result = client.execute_query(query, variables)
+
+    # Cache successful results
+    if use_cache and result.get("success"):
+        query_cache.set(query, variables, base_url, result, ttl=cache_ttl)
+
+    return json.dumps(result, indent=2)
+
+
+def _get_cache_stats_impl() -> str:
+    """Get statistics about the query cache.
+
+    Returns:
+        JSON string with cache statistics including size and expired items
+    """
+    stats = query_cache.stats()
+    return json.dumps(stats, indent=2)
+
+
+def _clear_cache_impl() -> str:
+    """Clear all cached query results.
+
+    Returns:
+        Confirmation message
+    """
+    query_cache.clear()
+    return json.dumps({"success": True, "message": "Cache cleared successfully"})
+
+
+def _get_graphql_schema_impl() -> str:
+    """Provides the CDash GraphQL schema documentation.
+
+    This resource contains helpful information about available queries,
+    types, and fields in the CDash GraphQL API.
+    """
+    return """# CDash GraphQL Schema Guide
+
+## Common Query Patterns
+
+### 1. List All Projects
+```graphql
+query {
+  projects {
+    edges {
+      node {
+        id
+        name
+        description
+        homeurl
+        visibility
+        buildCount
+      }
+    }
+  }
+}
+```
+
+### 2. Get a Specific Project
+```graphql
+query GetProject($name: String!) {
+  project(name: $name) {
+    id
+    name
+    description
+    buildCount
+  }
+}
+```
+Variables: `{"name": "YourProjectName"}`
+
+### 3. List Builds for a Project
+```graphql
+query GetBuilds($projectName: String!, $first: Int) {
+  project(name: $projectName) {
+    builds(first: $first) {
+      edges {
+        node {
+          id
+          name
+          stamp
+          startTime
+          endTime
+          failedTestsCount
+          passedTestsCount
+          site {
+            name
+          }
+        }
+      }
+    }
+  }
+}
+```
+Variables: `{"projectName": "MyProject", "first": 50}`
+
+### 4. Get Build Details
+```graphql
+query GetBuild($buildId: ID!) {
+  build(id: $buildId) {
+    id
+    name
+    stamp
+    startTime
+    endTime
+    failedTestsCount
+    passedTestsCount
+    site {
+      id
+      name
+    }
+    project {
+      name
+    }
+  }
+}
+```
+Variables: `{"buildId": "123"}`
+
+## Available Top-Level Queries
+
+- `me` - Get current user (requires authentication)
+- `user(id: ID!)` - Get a specific user by ID
+- `project(id: ID, name: String)` - Get a project by ID or name
+- `projects(first: Int!, after: String)` - List projects with pagination
+- `build(id: ID!)` - Get a specific build by ID
+- `site(id: ID!)` - Get a specific site by ID
+- `users(first: Int!, after: String)` - List users with pagination
+
+## Pagination
+
+CDash uses cursor-based pagination:
+- Use `first: Int` to limit results
+- Use `after: String` with the cursor from previous query for next page
+- Results are in `edges` array with `node` containing the actual data
+- Use `pageInfo { hasNextPage endCursor }` to navigate pages
+
+## Tips
+
+1. **Cache awareness**: Queries are cached for 5 minutes by default
+2. **Performance**: Request only the fields you need to reduce payload size
+3. **Pagination**: Use appropriate `first` values (10-100) for large datasets
+4. **Error handling**: Check the response for `errors` field"""
+
+
+# MCP Tool and Resource wrappers
+@mcp.tool()
+def execute_graphql_query(
+    query: str,
+    base_url: str = "https://open.cdash.org",
+    variables: dict = None,
+    use_cache: bool = True,
+    cache_ttl: int = None,
+) -> str:
+    """Execute a GraphQL query against a CDash instance.
+
+    This tool allows you to run any GraphQL query against CDash. The server
+    will cache results to improve performance for repeated queries.
+
+    Args:
+        query: GraphQL query string (required)
+        base_url: CDash instance URL (default: https://open.cdash.org)
+        variables: Dictionary of GraphQL variables (optional)
+        use_cache: Whether to use cached results if available (default: True)
+        cache_ttl: Cache time-to-live in seconds, overrides default 300s (optional)
+
+    Returns:
+        JSON string with query results or error information
+    """
+    return _execute_graphql_query_impl(query, base_url, variables, use_cache, cache_ttl)
+
+
+@mcp.tool()
+def get_cache_stats() -> str:
+    """Get statistics about the query cache.
+
+    Returns:
+        JSON string with cache statistics including size and expired items
+    """
+    return _get_cache_stats_impl()
+
+
+@mcp.tool()
+def clear_cache() -> str:
+    """Clear all cached query results.
+
+    Returns:
+        Confirmation message
+    """
+    return _clear_cache_impl()
+
+
+@mcp.resource("cdash://schema_reference")
+def get_graphql_schema() -> str:
+    """Provides the CDash GraphQL schema documentation.
+
+    This resource contains helpful information about available queries,
+    types, and fields in the CDash GraphQL API.
+    """
+    return _get_graphql_schema_impl()
 
 
 @click.command()
@@ -145,19 +279,37 @@ def list_builds(
 )
 @click.option("--host", default="127.0.0.1", help="Host (HTTP only)")
 @click.option("--port", default=8000, type=int, help="Port (HTTP only)")
-def main(transport, host, port):
-    """Run the CDash MCP Server.
+@click.option(
+    "--cache-size",
+    default=100,
+    type=int,
+    help="Maximum cache size (default: 100)",
+)
+@click.option(
+    "--cache-ttl",
+    default=300,
+    type=int,
+    help="Default cache TTL in seconds (default: 300)",
+)
+def main(transport, host, port, cache_size, cache_ttl):
+    """Run the CDash GraphQL MCP Server.
 
-    The server accepts CDash URL and token as parameters when calling tools.
-    No configuration needed at server startup.
+    This server provides a generic GraphQL query executor for CDash instances,
+    with built-in caching for improved performance.
     """
+    # Update cache configuration
+    global query_cache
+    query_cache = QueryCache(max_size=cache_size, default_ttl=cache_ttl)
+
     if transport == "http":
-        click.echo(f"Starting CDash MCP Server on http://{host}:{port}")
-        click.echo("Tools accept base_url and token as parameters")
+        click.echo(f"Starting CDash GraphQL MCP Server on http://{host}:{port}")
+        click.echo(f"Cache: max_size={cache_size}, default_ttl={cache_ttl}s")
+        click.echo("Use execute_graphql_query tool to run queries")
         asyncio.run(mcp.run_http_async(host=host, port=port))
     else:
-        click.echo("Starting CDash MCP Server on stdio transport")
-        click.echo("Tools accept base_url and token as parameters")
+        click.echo("Starting CDash GraphQL MCP Server on stdio transport")
+        click.echo(f"Cache: max_size={cache_size}, default_ttl={cache_ttl}s")
+        click.echo("Use execute_graphql_query tool to run queries")
         mcp.run()
 
 
